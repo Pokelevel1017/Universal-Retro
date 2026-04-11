@@ -45,10 +45,23 @@ button:hover {
     background: #555;
 }
 
-#gameList button {
+.game {
+    display: inline-block;
+    margin: 10px;
+    cursor: pointer;
+}
+
+.game img {
+    width: 120px;
+    height: 160px;
     display: block;
-    width: 200px;
-    margin: 5px auto;
+    border: 2px solid #777;
+}
+
+.game span {
+    display: block;
+    margin-top: 5px;
+    font-size: 12px;
 }
 </style>
 </head>
@@ -83,9 +96,13 @@ const nes = new jsnes.NES({
     }
 });
 
+let frameInterval;
 function loadROM(data) {
+    // Stop previous loop
+    if (frameInterval) clearInterval(frameInterval);
+
     nes.loadROM(data);
-    setInterval(() => nes.frame(), 1000 / 60);
+    frameInterval = setInterval(() => nes.frame(), 1000 / 60);
 }
 
 // Upload ROM
@@ -98,7 +115,13 @@ document.getElementById("romInput").addEventListener("change", function(e) {
     reader.readAsBinaryString(file);
 });
 
-// Auto load ROMs from folder
+// Convert ROM name to box art URL
+function getBoxArt(name) {
+    const cleanName = name.replace(".nes", "");
+    return `https://thumbnails.libretro.com/Nintendo%20-%20Nintendo%20Entertainment%20System/Named_Boxarts/${encodeURIComponent(cleanName)}.png`;
+}
+
+// Auto load ROMs + box art
 async function loadNESRomsFromFolder() {
     const romPath = "./roms/nes/";
 
@@ -109,14 +132,33 @@ async function loadNESRomsFromFolder() {
         const container = document.getElementById("gameList");
 
         roms.forEach(rom => {
-            const btn = document.createElement("button");
-            btn.textContent = rom.replace(".nes", "");
-            btn.onclick = async () => {
+            const gameDiv = document.createElement("div");
+            gameDiv.className = "game";
+
+            const img = document.createElement("img");
+            img.src = getBoxArt(rom);
+            img.onerror = () => img.src = "https://via.placeholder.com/120x160?text=No+Art";
+
+            const title = document.createElement("span");
+            title.textContent = rom.replace(".nes", "");
+
+            gameDiv.onclick = async () => {
                 const res = await fetch(romPath + rom);
-                const data = await res.text();
-                loadROM(data);
+                const buffer = await res.arrayBuffer();
+
+                // Convert ArrayBuffer -> binary string (required by jsnes)
+                const bytes = new Uint8Array(buffer);
+                let binary = "";
+                for (let i = 0; i < bytes.length; i++) {
+                    binary += String.fromCharCode(bytes[i]);
+                }
+
+                loadROM(binary);
             };
-            container.appendChild(btn);
+
+            gameDiv.appendChild(img);
+            gameDiv.appendChild(title);
+            container.appendChild(gameDiv);
         });
 
     } catch (err) {
