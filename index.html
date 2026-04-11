@@ -56,7 +56,22 @@ body{
     width:320px;
     background:#141414;
     border-right:2px solid #2a2a2a;
+    display:flex;
+    flex-direction:column;
+}
+
+#search{
+    padding:10px;
+    background:#0f0f0f;
+    border:none;
+    color:#fff;
+    outline:none;
+    border-bottom:1px solid #222;
+}
+
+.gameList{
     overflow-y:auto;
+    flex:1;
 }
 
 .game{
@@ -73,6 +88,7 @@ body{
     flex-direction:column;
     align-items:center;
     justify-content:center;
+    position:relative;
 }
 
 canvas{
@@ -102,6 +118,24 @@ button{
     font-size:18px;
 }
 #boot.hide{display:none;}
+
+#controlsOverlay{
+    position:absolute;
+    right:10px;
+    top:10px;
+    width:220px;
+    background:rgba(20,20,20,0.85);
+    border:1px solid #333;
+    padding:10px;
+    font-size:11px;
+    line-height:1.6em;
+}
+
+#controlsOverlay h3{
+    margin:0 0 6px 0;
+    font-size:12px;
+    color:#ff3b3b;
+}
 </style>
 </head>
 <body>
@@ -118,17 +152,34 @@ button{
 </div>
 
 <div id="library" class="page">
-<div id="sidebar"></div>
+
+<div id="sidebar">
+    <input id="search" placeholder="Search ROMs..." oninput="filterGames()">
+    <div class="gameList" id="gameList"></div>
+</div>
+
 <div id="screenArea">
 <div id="boot">BOOTING...</div>
 <canvas id="screen" width="256" height="240"></canvas>
+
+<div id="controlsOverlay">
+<h3>KEYBINDS</h3>
+⬅➡⬆⬇ = D-Pad<br>
+Z = A Button<br>
+X = B Button<br>
+Enter = Start<br>
+Shift = Select<br>
+</div>
+
 <button onclick="backHome()">Back</button>
 </div>
+
 </div>
 
 <script>
 let currentConsole="nes";
 let roms=[];
+let filtered=[];
 let current=0;
 let running=false;
 
@@ -149,8 +200,12 @@ const nes=new jsnes.NES({
     }
 });
 
-function loop(){
-    if(running) nes.frame();
+let last=0;
+function loop(ts){
+    if(ts-last>16.67){
+        if(running) nes.frame();
+        last=ts;
+    }
     requestAnimationFrame(loop);
 }
 requestAnimationFrame(loop);
@@ -191,40 +246,51 @@ function getPath(){
 }
 
 async function loadROMList(){
-    const side=document.getElementById("sidebar");
-    side.innerHTML="Loading...";
+    const list=document.getElementById("gameList");
+    list.innerHTML="Loading...";
 
     try{
         const res=await fetch(getPath()+"roms.json");
         roms=await res.json();
 
-        side.innerHTML="";
-
-        roms.forEach((r,i)=>{
-            const file=r.file||r;
-
-            const div=document.createElement("div");
-            div.className="game";
-            div.textContent=file;
-
-            div.onclick=async()=>{
-                current=i;
-                const bin=await fetchROM(getPath()+file);
-                loadROM(bin);
-                showPage('library');
-            };
-
-            side.appendChild(div);
-        });
+        filtered=roms.map(r=>r.file||r);
+        renderList();
 
     }catch(e){
-        side.innerHTML="No ROMs found";
+        list.innerHTML="No ROMs found";
     }
+}
+
+function renderList(){
+    const list=document.getElementById("gameList");
+    list.innerHTML="";
+
+    filtered.forEach((file,i)=>{
+        const div=document.createElement("div");
+        div.className="game";
+        div.textContent=file;
+
+        div.onclick=async()=>{
+            current=i;
+            const bin=await fetchROM(getPath()+file);
+            loadROM(bin);
+        };
+
+        list.appendChild(div);
+    });
+}
+
+function filterGames(){
+    const q=document.getElementById("search").value.toLowerCase();
+
+    filtered=roms.map(r=>r.file||r).filter(f=>f.toLowerCase().includes(q));
+    renderList();
 }
 
 window.addEventListener("keydown",e=>{
     if(currentConsole!="nes") return;
     const k=e.key;
+
     if(k=="z") nes.buttonDown(1,jsnes.Controller.BUTTON_A);
     if(k=="x") nes.buttonDown(1,jsnes.Controller.BUTTON_B);
     if(k=="Enter") nes.buttonDown(1,jsnes.Controller.BUTTON_START);
@@ -238,6 +304,7 @@ window.addEventListener("keydown",e=>{
 window.addEventListener("keyup",e=>{
     if(currentConsole!="nes") return;
     const k=e.key;
+
     if(k=="z") nes.buttonUp(1,jsnes.Controller.BUTTON_A);
     if(k=="x") nes.buttonUp(1,jsnes.Controller.BUTTON_B);
     if(k=="Enter") nes.buttonUp(1,jsnes.Controller.BUTTON_START);
