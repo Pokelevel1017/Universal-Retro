@@ -3,67 +3,69 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Arcade NES Hub (Auto Metadata)</title>
+<title>Retro Console Hub</title>
 <script src="https://unpkg.com/jsnes/dist/jsnes.min.js"></script>
 <style>
 body{
     margin:0;
+    font-family:monospace;
     background:#0b0b0b;
     color:#fff;
-    font-family:monospace;
     overflow:hidden;
 }
 
-#app{
-    display:flex;
-    height:100vh;
+.page{display:none;height:100vh;width:100vw;}
+.page.active{display:flex;}
+
+#home{
+    align-items:center;
+    justify-content:center;
+    flex-direction:column;
+}
+
+#home h1{
+    color:#ff3b3b;
+    margin-bottom:20px;
+}
+
+.consoleGrid{
+    display:grid;
+    grid-template-columns:repeat(3,180px);
+    gap:20px;
+}
+
+.consoleCard{
+    background:#161616;
+    border:2px solid #333;
+    padding:20px;
+    text-align:center;
+    cursor:pointer;
+    transition:0.2s;
+}
+
+.consoleCard:hover{
+    transform:scale(1.05);
+    border-color:#ff3b3b;
+}
+
+#library{
+    flex-direction:row;
 }
 
 #sidebar{
-    width:420px;
+    width:320px;
     background:#141414;
     border-right:2px solid #2a2a2a;
-    overflow-x:auto;
-    display:flex;
-    gap:18px;
-    padding:30px 20px;
-    scroll-snap-type:x mandatory;
+    overflow-y:auto;
 }
 
-.card{
-    flex:0 0 auto;
-    width:180px;
-    opacity:0.4;
-    transform:scale(0.85);
-    transition:0.35s ease;
+.game{
+    padding:10px;
+    border-bottom:1px solid #222;
     cursor:pointer;
-    scroll-snap-align:center;
-    text-align:center;
 }
 
-.card.active{
-    opacity:1;
-    transform:scale(1.15);
-}
-
-.card img{
-    width:180px;
-    height:240px;
-    object-fit:cover;
-    border:2px solid #444;
-    border-radius:6px;
-}
-
-.title{
-    font-size:12px;
-    margin-top:4px;
-}
-
-.meta{
-    font-size:10px;
-    color:#aaa;
-    margin-top:4px;
-}
+.game:hover{background:#222;}
 
 #screenArea{
     flex:1;
@@ -81,18 +83,14 @@ canvas{
     image-rendering:pixelated;
 }
 
-#controls{
-    margin-top:10px;
-}
-
 button{
+    margin-top:10px;
     background:#222;
     color:#fff;
     border:1px solid #444;
     padding:6px 10px;
     cursor:pointer;
 }
-button:hover{background:#333;}
 
 #boot{
     position:absolute;
@@ -102,32 +100,37 @@ button:hover{background:#333;}
     align-items:center;
     justify-content:center;
     font-size:18px;
-    letter-spacing:3px;
 }
 #boot.hide{display:none;}
 </style>
 </head>
 <body>
 
-<div id="app">
-<div id="sidebar"></div>
+<div id="home" class="page active">
+    <h1>RETRO CONSOLE HUB</h1>
+    <div class="consoleGrid">
+        <div class="consoleCard" onclick="openConsole('nes')">NES</div>
+        <div class="consoleCard" onclick="openConsole('snes')">SNES</div>
+        <div class="consoleCard" onclick="openConsole('gb')">Game Boy</div>
+        <div class="consoleCard" onclick="openConsole('gbc')">Game Boy Color</div>
+        <div class="consoleCard" onclick="openConsole('gba')">Game Boy Advance</div>
+    </div>
+</div>
 
+<div id="library" class="page">
+<div id="sidebar"></div>
 <div id="screenArea">
 <div id="boot">BOOTING...</div>
 <canvas id="screen" width="256" height="240"></canvas>
-
-<div id="controls">
-<button onclick="saveState()">Save</button>
-<button onclick="loadState()">Load</button>
-</div>
+<button onclick="backHome()">Back</button>
 </div>
 </div>
 
 <script>
-let running=false;
-let save=null;
+let currentConsole="nes";
 let roms=[];
 let current=0;
+let running=false;
 
 const canvas=document.getElementById("screen");
 const ctx=canvas.getContext("2d");
@@ -152,7 +155,22 @@ function loop(){
 }
 requestAnimationFrame(loop);
 
-window.onload=()=>setTimeout(()=>document.getElementById("boot").classList.add("hide"),900);
+window.onload=()=>setTimeout(()=>document.getElementById("boot").classList.add("hide"),800);
+
+function showPage(id){
+    document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+    document.getElementById(id).classList.add('active');
+}
+
+function openConsole(type){
+    currentConsole=type;
+    showPage('library');
+    loadROMList();
+}
+
+function backHome(){
+    showPage('home');
+}
 
 function loadROM(bin){
     nes.loadROM(bin);
@@ -168,86 +186,44 @@ async function fetchROM(path){
     return s;
 }
 
-function saveState(){ save=nes.toJSON(); alert("Saved"); }
-function loadState(){ if(save) nes.fromJSON(save); }
-
-function boxArt(name){
-    const clean=name.replace('.nes','');
-    return `https://thumbnails.libretro.com/Nintendo%20-%20Nintendo%20Entertainment%20System/Named_Boxarts/${encodeURIComponent(clean)}.png`;
+function getPath(){
+    return `./roms/${currentConsole}/`;
 }
 
-// AUTO METADATA SCRAPER (ROBUST FALLBACK)
-function getMeta(file){
-    const base=file.replace('.nes','');
-
-    // lightweight auto-generated metadata (no API required)
-    const year = 1980 + (base.length % 10);
-
-    let dev = "Unknown Dev";
-    if(base.toLowerCase().includes("mario")) dev="Nintendo";
-    if(base.toLowerCase().includes("zelda")) dev="Nintendo";
-
-    let genre = "Action";
-    if(base.toLowerCase().includes("mario")) genre="Platformer";
-    if(base.toLowerCase().includes("zelda")) genre="Adventure";
-
-    const rating = (4 + (base.length % 10)/10).toFixed(1);
-
-    return {year,dev,genre,rating};
-}
-
-function render(){
+async function loadROMList(){
     const side=document.getElementById("sidebar");
-    side.innerHTML="";
+    side.innerHTML="Loading...";
 
-    roms.forEach((r,i)=>{
-        const file=r.file || r;
-        const title=r.title || file.replace('.nes','');
-        const meta=getMeta(file);
-
-        const c=document.createElement("div");
-        c.className="card"+(i===current?" active":"");
-
-        const img=document.createElement("img");
-        img.src=boxArt(file);
-        img.onerror=()=>img.src="https://via.placeholder.com/180x240?text=No+Art";
-
-        const t=document.createElement("div");
-        t.className="title";
-        t.textContent=title;
-
-        const m=document.createElement("div");
-        m.className="meta";
-        m.textContent=`${meta.year} | ${meta.dev} | ${meta.genre} | ⭐${meta.rating}`;
-
-        c.appendChild(img);
-        c.appendChild(t);
-        c.appendChild(m);
-
-        c.onclick=async()=>{
-            current=i;
-            render();
-            const bin=await fetchROM('./roms/nes/'+file);
-            loadROM(bin);
-        };
-
-        side.appendChild(c);
-    });
-}
-
-async function init(){
     try{
-        const res=await fetch("./roms/nes/roms.json");
-        const data=await res.json();
-        roms=data.map(x=>typeof x==="string"?{file:x}:x);
-        render();
+        const res=await fetch(getPath()+"roms.json");
+        roms=await res.json();
+
+        side.innerHTML="";
+
+        roms.forEach((r,i)=>{
+            const file=r.file||r;
+
+            const div=document.createElement("div");
+            div.className="game";
+            div.textContent=file;
+
+            div.onclick=async()=>{
+                current=i;
+                const bin=await fetchROM(getPath()+file);
+                loadROM(bin);
+                showPage('library');
+            };
+
+            side.appendChild(div);
+        });
+
     }catch(e){
-        document.getElementById("sidebar").innerHTML="No ROMs found";
+        side.innerHTML="No ROMs found";
     }
 }
 
-// CONTROLS FIX
 window.addEventListener("keydown",e=>{
+    if(currentConsole!="nes") return;
     const k=e.key;
     if(k=="z") nes.buttonDown(1,jsnes.Controller.BUTTON_A);
     if(k=="x") nes.buttonDown(1,jsnes.Controller.BUTTON_B);
@@ -260,6 +236,7 @@ window.addEventListener("keydown",e=>{
 });
 
 window.addEventListener("keyup",e=>{
+    if(currentConsole!="nes") return;
     const k=e.key;
     if(k=="z") nes.buttonUp(1,jsnes.Controller.BUTTON_A);
     if(k=="x") nes.buttonUp(1,jsnes.Controller.BUTTON_B);
@@ -271,8 +248,6 @@ window.addEventListener("keyup",e=>{
     if(k=="ArrowRight") nes.buttonUp(1,jsnes.Controller.BUTTON_RIGHT);
 });
 
-init();
 </script>
-
 </body>
 </html>
