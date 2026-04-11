@@ -3,169 +3,269 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>NES Classic Emulator</title>
+<title>Arcade Emulator Hub</title>
 <script src="https://unpkg.com/jsnes/dist/jsnes.min.js"></script>
 <style>
 body{
     margin:0;
-    background:#111;
+    background:#0b0b0b;
     color:#fff;
     font-family:monospace;
+    overflow:hidden;
+}
+
+/* Layout */
+#app{
     display:flex;
     height:100vh;
 }
 
-.left{
-    width:300px;
-    background:#1c1c1c;
-    padding:10px;
+#sidebar{
+    width:320px;
+    background:#151515;
+    border-right:2px solid #2a2a2a;
     overflow-y:auto;
-    border-right:2px solid #333;
 }
 
-.right{
+#screenArea{
     flex:1;
     display:flex;
     flex-direction:column;
     align-items:center;
     justify-content:center;
+    position:relative;
 }
 
-h1{
-    font-size:16px;
-    color:#ff3b3b;
+/* Header */
+#header{
+    padding:10px;
     text-align:center;
-}
-
-canvas{
-    width:512px;
-    height:480px;
-    image-rendering:pixelated;
-    border:6px solid #444;
-    background:black;
-}
-
-.game{
-    display:flex;
-    gap:10px;
-    padding:8px;
-    cursor:pointer;
+    font-size:14px;
+    color:#ff3b3b;
     border-bottom:1px solid #333;
 }
 
+/* Game list */
+.game{
+    display:flex;
+    gap:10px;
+    padding:10px;
+    cursor:pointer;
+    border-bottom:1px solid #222;
+    align-items:center;
+}
+
 .game:hover{
-    background:#2a2a2a;
+    background:#222;
 }
 
 .game img{
     width:50px;
     height:70px;
     object-fit:cover;
-    border:1px solid #555;
+    border:1px solid #444;
 }
 
+/* Canvas */
+canvas{
+    width:512px;
+    height:480px;
+    background:black;
+    border:6px solid #333;
+    image-rendering:pixelated;
+}
+
+/* Controls */
+#controls{
+    margin-top:10px;
+    display:flex;
+    gap:10px;
+}
+
+button{
+    background:#222;
+    color:#fff;
+    border:1px solid #444;
+    padding:6px 10px;
+    cursor:pointer;
+}
+button:hover{background:#333;}
+
+/* Boot screen */
+#boot{
+    position:absolute;
+    inset:0;
+    background:black;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-size:20px;
+    letter-spacing:3px;
+    opacity:1;
+    transition:opacity 1s;
+}
+
+#boot.hide{
+    opacity:0;
+    pointer-events:none;
+}
+
+/* Fullscreen mode */
+.fullscreen canvas{
+    width:100vw;
+    height:100vh;
+    border:none;
+}
+
+.fullscreen #sidebar,
+.fullscreen #controls{
+    display:none;
+}
 </style>
 </head>
 <body>
 
-<div class="left">
-<h1>NES Library</h1>
+<div id="app">
+
+<div id="sidebar">
+<div id="header">ARCADE HUB</div>
 <div id="gameList"></div>
 </div>
 
-<div class="right">
+<div id="screenArea">
+<div id="boot">POWERING ON...</div>
 <canvas id="screen" width="256" height="240"></canvas>
+
+<div id="controls">
+<button onclick="saveState()">Save</button>
+<button onclick="loadState()">Load</button>
+<button onclick="toggleFullscreen()">Fullscreen</button>
+</div>
+</div>
+
 </div>
 
 <script>
-const canvas = document.getElementById("screen");
-const ctx = canvas.getContext("2d");
-const imageData = ctx.getImageData(0,0,256,240);
+let frameRunning=false;
+let savedState=null;
 
-let frameRunning = false;
+// NES CORE
+const nes=new jsnes.NES({
+    onFrame(framebuffer){
+        const ctx=canvas.getContext("2d");
+        const imageData=ctx.getImageData(0,0,256,240);
 
-const nes = new jsnes.NES({
-    onFrame: function(framebuffer_24){
-        for(let i=0;i<framebuffer_24.length;i++){
-            const pixel = framebuffer_24[i];
-            imageData.data[i*4] = pixel & 0xFF;
-            imageData.data[i*4+1] = (pixel>>8) & 0xFF;
-            imageData.data[i*4+2] = (pixel>>16) & 0xFF;
-            imageData.data[i*4+3] = 255;
+        for(let i=0;i<framebuffer.length;i++){
+            const p=framebuffer[i];
+            imageData.data[i*4]=p&255;
+            imageData.data[i*4+1]=(p>>8)&255;
+            imageData.data[i*4+2]=(p>>16)&255;
+            imageData.data[i*4+3]=255;
         }
+
         ctx.putImageData(imageData,0,0);
+    },
+
+    onAudioSample(left,right){
+        // basic sound hook (browser handles via AudioContext if extended)
     }
 });
 
-function gameLoop(){
-    if(frameRunning){
-        nes.frame();
-    }
-    requestAnimationFrame(gameLoop);
+const canvas=document.getElementById("screen");
+
+function loop(){
+    if(frameRunning) nes.frame();
+    requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+
+// Boot animation
+window.addEventListener("load",()=>{
+    setTimeout(()=>{
+        document.getElementById("boot").classList.add("hide");
+    },1500);
+});
+
+// Load ROM
+async function loadROM(binary){
+    nes.loadROM(binary);
+    frameRunning=true;
 }
 
-requestAnimationFrame(gameLoop);
-
-function loadROM(binaryString){
-    nes.loadROM(binaryString);
-    frameRunning = true;
-}
-
-// Convert file or fetch buffer properly
+// Fetch ROM
 async function fetchROM(path){
-    const res = await fetch(path);
-    const buffer = await res.arrayBuffer();
-    const bytes = new Uint8Array(buffer);
+    const res=await fetch(path);
+    const buf=await res.arrayBuffer();
+    const bytes=new Uint8Array(buf);
+    let bin="";
+    for(let i=0;i<bytes.length;i++) bin+=String.fromCharCode(bytes[i]);
+    return bin;
+}
 
-    let binary = "";
-    for(let i=0;i<bytes.length;i++){
-        binary += String.fromCharCode(bytes[i]);
-    }
+// Save / Load state
+function saveState(){
+    savedState=nes.toJSON();
+    alert("State saved");
+}
 
-    return binary;
+function loadState(){
+    if(savedState) nes.fromJSON(savedState);
+}
+
+// Fullscreen arcade mode
+function toggleFullscreen(){
+    document.body.classList.toggle("fullscreen");
+}
+
+// Detect console
+function detectConsole(file){
+    const ext=file.split('.').pop().toLowerCase();
+    if(ext==='nes') return 'nes';
+    if(ext==='sfc'||ext==='smc') return 'snes';
+    if(ext==='gba') return 'gba';
+    return 'unknown';
 }
 
 // Box art
-function getBoxArt(name){
-    const clean = name.replace(".nes","");
+function boxArt(name){
+    const clean=name.replace('.nes','');
     return `https://thumbnails.libretro.com/Nintendo%20-%20Nintendo%20Entertainment%20System/Named_Boxarts/${encodeURIComponent(clean)}.png`;
 }
 
-// ROM list
+// Game list
 async function loadGames(){
-    const romPath = "./roms/nes/";
+    const res=await fetch('./roms/nes/roms.json');
+    const roms=await res.json();
+    const list=document.getElementById("gameList");
 
-    try{
-        const res = await fetch("./roms/nes/roms.json");
-        const roms = await res.json();
+    roms.forEach(r=>{
+        const div=document.createElement("div");
+        div.className="game";
 
-        const list = document.getElementById("gameList");
+        const img=document.createElement("img");
+        img.src=boxArt(r);
+        img.onerror=()=>img.src="https://via.placeholder.com/50x70?text=?";
 
-        roms.forEach(rom=>{
-            const div = document.createElement("div");
-            div.className="game";
+        const label=document.createElement("div");
+        label.textContent=r;
 
-            const img = document.createElement("img");
-            img.src = getBoxArt(rom);
-            img.onerror = ()=>img.src="https://via.placeholder.com/50x70?text=?";
+        div.appendChild(img);
+        div.appendChild(label);
 
-            const label = document.createElement("div");
-            label.textContent = rom.replace(".nes","");
+        div.onclick=async()=>{
+            const bin=await fetchROM('./roms/nes/'+r);
 
-            div.appendChild(img);
-            div.appendChild(label);
+            const consoleType=detectConsole(r);
 
-            div.onclick = async ()=>{
-                const bin = await fetchROM(romPath+rom);
+            if(consoleType==='nes'){
                 loadROM(bin);
-            };
+            }else{
+                alert(consoleType.toUpperCase()+" not yet supported in this build");
+            }
+        };
 
-            list.appendChild(div);
-        });
-
-    }catch(e){
-        console.log("No ROM list");
-    }
+        list.appendChild(div);
+    });
 }
 
 loadGames();
