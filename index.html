@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Arcade Emulator Hub</title>
+<title>Arcade NES Hub (Netflix Coverflow)</title>
 <script src="https://unpkg.com/jsnes/dist/jsnes.min.js"></script>
 <style>
 body{
@@ -14,17 +14,59 @@ body{
     overflow:hidden;
 }
 
-/* Layout */
 #app{
     display:flex;
     height:100vh;
 }
 
+/* NETFLIX STYLE SIDEBAR */
 #sidebar{
-    width:320px;
-    background:#151515;
+    width:420px;
+    background:#141414;
     border-right:2px solid #2a2a2a;
-    overflow-y:auto;
+    overflow-x:auto;
+    overflow-y:hidden;
+    display:flex;
+    gap:18px;
+    padding:30px 20px;
+    scroll-snap-type:x mandatory;
+}
+
+.card{
+    flex:0 0 auto;
+    width:180px;
+    transition:transform 0.35s ease, opacity 0.35s ease;
+    cursor:pointer;
+    opacity:0.4;
+    transform:scale(0.85);
+    scroll-snap-align:center;
+    text-align:center;
+}
+
+.card.active{
+    opacity:1;
+    transform:scale(1.15);
+}
+
+.card img{
+    width:180px;
+    height:240px;
+    object-fit:cover;
+    border:2px solid #444;
+    border-radius:6px;
+}
+
+.meta{
+    font-size:10px;
+    color:#aaa;
+    margin-top:6px;
+    line-height:1.3em;
+}
+
+.title{
+    font-size:12px;
+    margin-top:4px;
+    color:#fff;
 }
 
 #screenArea{
@@ -33,40 +75,8 @@ body{
     flex-direction:column;
     align-items:center;
     justify-content:center;
-    position:relative;
 }
 
-/* Header */
-#header{
-    padding:10px;
-    text-align:center;
-    font-size:14px;
-    color:#ff3b3b;
-    border-bottom:1px solid #333;
-}
-
-/* Game list */
-.game{
-    display:flex;
-    gap:10px;
-    padding:10px;
-    cursor:pointer;
-    border-bottom:1px solid #222;
-    align-items:center;
-}
-
-.game:hover{
-    background:#222;
-}
-
-.game img{
-    width:50px;
-    height:70px;
-    object-fit:cover;
-    border:1px solid #444;
-}
-
-/* Canvas */
 canvas{
     width:512px;
     height:480px;
@@ -75,11 +85,8 @@ canvas{
     image-rendering:pixelated;
 }
 
-/* Controls */
 #controls{
     margin-top:10px;
-    display:flex;
-    gap:10px;
 }
 
 button{
@@ -89,9 +96,9 @@ button{
     padding:6px 10px;
     cursor:pointer;
 }
+
 button:hover{background:#333;}
 
-/* Boot screen */
 #boot{
     position:absolute;
     inset:0;
@@ -99,62 +106,43 @@ button:hover{background:#333;}
     display:flex;
     align-items:center;
     justify-content:center;
-    font-size:20px;
+    font-size:18px;
     letter-spacing:3px;
-    opacity:1;
-    transition:opacity 1s;
 }
 
-#boot.hide{
-    opacity:0;
-    pointer-events:none;
-}
-
-/* Fullscreen mode */
-.fullscreen canvas{
-    width:100vw;
-    height:100vh;
-    border:none;
-}
-
-.fullscreen #sidebar,
-.fullscreen #controls{
-    display:none;
-}
+#boot.hide{display:none;}
 </style>
 </head>
 <body>
 
 <div id="app">
 
-<div id="sidebar">
-<div id="header">ARCADE HUB</div>
-<div id="gameList"></div>
-</div>
+<div id="sidebar"></div>
 
 <div id="screenArea">
-<div id="boot">POWERING ON...</div>
+<div id="boot">BOOTING...</div>
 <canvas id="screen" width="256" height="240"></canvas>
 
 <div id="controls">
 <button onclick="saveState()">Save</button>
 <button onclick="loadState()">Load</button>
-<button onclick="toggleFullscreen()">Fullscreen</button>
-</div>
 </div>
 
+</div>
 </div>
 
 <script>
-let frameRunning=false;
-let savedState=null;
+let nesRunning=false;
+let saveData=null;
+let roms=[];
+let current=0;
 
-// NES CORE
+const canvas=document.getElementById("screen");
+const ctx=canvas.getContext("2d");
+const imageData=ctx.getImageData(0,0,256,240);
+
 const nes=new jsnes.NES({
     onFrame(framebuffer){
-        const ctx=canvas.getContext("2d");
-        const imageData=ctx.getImageData(0,0,256,240);
-
         for(let i=0;i<framebuffer.length;i++){
             const p=framebuffer[i];
             imageData.data[i*4]=p&255;
@@ -162,113 +150,113 @@ const nes=new jsnes.NES({
             imageData.data[i*4+2]=(p>>16)&255;
             imageData.data[i*4+3]=255;
         }
-
         ctx.putImageData(imageData,0,0);
-    },
-
-    onAudioSample(left,right){
-        // basic sound hook (browser handles via AudioContext if extended)
     }
 });
 
-const canvas=document.getElementById("screen");
-
 function loop(){
-    if(frameRunning) nes.frame();
+    if(nesRunning) nes.frame();
     requestAnimationFrame(loop);
 }
 requestAnimationFrame(loop);
 
-// Boot animation
-window.addEventListener("load",()=>{
-    setTimeout(()=>{
-        document.getElementById("boot").classList.add("hide");
-    },1500);
-});
+window.onload=()=>{
+    setTimeout(()=>document.getElementById("boot").classList.add("hide"),900);
+};
 
-// Load ROM
-async function loadROM(binary){
-    nes.loadROM(binary);
-    frameRunning=true;
+function loadROM(bin){
+    nes.loadROM(bin);
+    nesRunning=true;
 }
 
-// Fetch ROM
 async function fetchROM(path){
-    const res=await fetch(path);
-    const buf=await res.arrayBuffer();
-    const bytes=new Uint8Array(buf);
-    let bin="";
-    for(let i=0;i<bytes.length;i++) bin+=String.fromCharCode(bytes[i]);
-    return bin;
+    const r=await fetch(path);
+    const b=await r.arrayBuffer();
+    const u=new Uint8Array(b);
+    let s="";
+    for(let i=0;i<u.length;i++) s+=String.fromCharCode(u[i]);
+    return s;
 }
 
-// Save / Load state
-function saveState(){
-    savedState=nes.toJSON();
-    alert("State saved");
-}
+function saveState(){ saveData=nes.toJSON(); alert("Saved state"); }
+function loadState(){ if(saveData) nes.fromJSON(saveData); }
 
-function loadState(){
-    if(savedState) nes.fromJSON(savedState);
-}
-
-// Fullscreen arcade mode
-function toggleFullscreen(){
-    document.body.classList.toggle("fullscreen");
-}
-
-// Detect console
-function detectConsole(file){
-    const ext=file.split('.').pop().toLowerCase();
-    if(ext==='nes') return 'nes';
-    if(ext==='sfc'||ext==='smc') return 'snes';
-    if(ext==='gba') return 'gba';
-    return 'unknown';
-}
-
-// Box art
-function boxArt(name){
-    const clean=name.replace('.nes','');
+function art(file){
+    const clean=file.replace('.nes','');
     return `https://thumbnails.libretro.com/Nintendo%20-%20Nintendo%20Entertainment%20System/Named_Boxarts/${encodeURIComponent(clean)}.png`;
 }
 
-// Game list
-async function loadGames(){
-    const res=await fetch('./roms/nes/roms.json');
-    const roms=await res.json();
-    const list=document.getElementById("gameList");
+function meta(r){
+    return `${r.year} | ${r.dev} | ${r.genre} | ⭐${r.rating}`;
+}
 
-    roms.forEach(r=>{
-        const div=document.createElement("div");
-        div.className="game";
+function render(){
+    const side=document.getElementById("sidebar");
+    side.innerHTML="";
+
+    roms.forEach((r,i)=>{
+        const c=document.createElement("div");
+        c.className="card"+(i===current?" active":"");
 
         const img=document.createElement("img");
-        img.src=boxArt(r);
-        img.onerror=()=>img.src="https://via.placeholder.com/50x70?text=?";
+        img.src=art(r.file);
+        img.onerror=()=>img.src="https://via.placeholder.com/180x240?text=No+Art";
 
-        const label=document.createElement("div");
-        label.textContent=r;
+        const t=document.createElement("div");
+        t.className="title";
+        t.textContent=r.title;
 
-        div.appendChild(img);
-        div.appendChild(label);
+        const m=document.createElement("div");
+        m.className="meta";
+        m.textContent=meta(r);
 
-        div.onclick=async()=>{
-            const bin=await fetchROM('./roms/nes/'+r);
+        c.appendChild(img);
+        c.appendChild(t);
+        c.appendChild(m);
 
-            const consoleType=detectConsole(r);
-
-            if(consoleType==='nes'){
-                loadROM(bin);
-            }else{
-                alert(consoleType.toUpperCase()+" not yet supported in this build");
-            }
+        c.onclick=async()=>{
+            current=i;
+            render();
+            const bin=await fetchROM('./roms/nes/'+r.file);
+            loadROM(bin);
         };
 
-        list.appendChild(div);
+        side.appendChild(c);
     });
 }
 
-loadGames();
+async function init(){
+    const res=await fetch("./roms/nes/roms.json");
+    roms=await res.json();
+    render();
+}
+
+// FIXED CONTROLS
+window.addEventListener("keydown",e=>{
+    const k=e.key;
+    if(k=="z") nes.buttonDown(1,jsnes.Controller.BUTTON_A);
+    if(k=="x") nes.buttonDown(1,jsnes.Controller.BUTTON_B);
+    if(k=="Enter") nes.buttonDown(1,jsnes.Controller.BUTTON_START);
+    if(k=="Shift") nes.buttonDown(1,jsnes.Controller.BUTTON_SELECT);
+    if(k=="ArrowUp") nes.buttonDown(1,jsnes.Controller.BUTTON_UP);
+    if(k=="ArrowDown") nes.buttonDown(1,jsnes.Controller.BUTTON_DOWN);
+    if(k=="ArrowLeft") nes.buttonDown(1,jsnes.Controller.BUTTON_LEFT);
+    if(k=="ArrowRight") nes.buttonDown(1,jsnes.Controller.BUTTON_RIGHT);
+});
+
+window.addEventListener("keyup",e=>{
+    const k=e.key;
+    if(k=="z") nes.buttonUp(1,jsnes.Controller.BUTTON_A);
+    if(k=="x") nes.buttonUp(1,jsnes.Controller.BUTTON_B);
+    if(k=="Enter") nes.buttonUp(1,jsnes.Controller.BUTTON_START);
+    if(k=="Shift") nes.buttonUp(1,jsnes.Controller.BUTTON_SELECT);
+    if(k=="ArrowUp") nes.buttonUp(1,jsnes.Controller.BUTTON_UP);
+    if(k=="ArrowDown") nes.buttonUp(1,jsnes.Controller.BUTTON_DOWN);
+    if(k=="ArrowLeft") nes.buttonUp(1,jsnes.Controller.BUTTON_LEFT);
+    if(k=="ArrowRight") nes.buttonUp(1,jsnes.Controller.BUTTON_RIGHT);
+});
+
+init();
 </script>
 
 </body>
