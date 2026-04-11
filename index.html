@@ -53,7 +53,7 @@ body{
 }
 
 #sidebar{
-    width:320px;
+    width:380px;
     background:#141414;
     border-right:2px solid #2a2a2a;
     display:flex;
@@ -69,18 +69,43 @@ body{
     border-bottom:1px solid #222;
 }
 
-.gameList{
-    overflow-y:auto;
-    flex:1;
+#gameList{
+    display:flex;
+    gap:16px;
+    overflow-x:auto;
+    padding:20px;
+    scroll-snap-type:x mandatory;
 }
 
-.game{
-    padding:10px;
-    border-bottom:1px solid #222;
+.card{
+    flex:0 0 auto;
+    width:160px;
+    transform:scale(0.85);
+    opacity:0.5;
+    transition:0.3s;
+    scroll-snap-align:center;
+    text-align:center;
     cursor:pointer;
 }
 
-.game:hover{background:#222;}
+.card.active{
+    transform:scale(1.15);
+    opacity:1;
+}
+
+.card img{
+    width:160px;
+    height:220px;
+    object-fit:cover;
+    border-radius:6px;
+    border:2px solid #333;
+}
+
+.meta{
+    font-size:10px;
+    color:#aaa;
+    margin-top:4px;
+}
 
 #screenArea{
     flex:1;
@@ -123,7 +148,7 @@ button{
     position:absolute;
     right:10px;
     top:10px;
-    width:220px;
+    width:240px;
     background:rgba(20,20,20,0.85);
     border:1px solid #333;
     padding:10px;
@@ -154,8 +179,8 @@ button{
 <div id="library" class="page">
 
 <div id="sidebar">
-    <input id="search" placeholder="Search ROMs..." oninput="filterGames()">
-    <div class="gameList" id="gameList"></div>
+    <input id="search" placeholder="Search games..." oninput="filterGames()">
+    <div id="gameList"></div>
 </div>
 
 <div id="screenArea">
@@ -182,6 +207,9 @@ let roms=[];
 let filtered=[];
 let current=0;
 let running=false;
+let metadataCache={};
+
+const TGDB_API_KEY="c93770c06e8d4589c634bb2f6835351b1b956446d539dfb1e51ed06ab6293587";
 
 const canvas=document.getElementById("screen");
 const ctx=canvas.getContext("2d");
@@ -245,6 +273,44 @@ function getPath(){
     return `./roms/${currentConsole}/`;
 }
 
+function cleanName(name){
+    return name.replace(/\.[^/.]+$/,"").replace(/[_\.]/g," ");
+}
+
+async function getMetadata(file){
+    if(metadataCache[file]) return metadataCache[file];
+
+    const query=encodeURIComponent(cleanName(file));
+
+    try{
+        const res=await fetch(`https://api.thegamesdb.net/v1/Games/ByGameName?apikey=${TGDB_API_KEY}&name=${query}&fields=boxart`);
+        const data=await res.json();
+
+        let game=data?.data?.games?.[0];
+
+        let cover="https://via.placeholder.com/160x220";
+        let title=cleanName(file);
+
+        if(game){
+            title=game.game_title || title;
+
+            const base=data?.include?.boxart?.base_url?.original;
+            const box=game.boxart?.find(b=>b.side=="front");
+
+            if(box && base) cover=base+box.filename;
+        }
+
+        const meta={title,cover};
+        metadataCache[file]=meta;
+        return meta;
+
+    }catch(e){
+        const fallback={title:cleanName(file),cover:"https://via.placeholder.com/160x220"};
+        metadataCache[file]=fallback;
+        return fallback;
+    }
+}
+
 async function loadROMList(){
     const list=document.getElementById("gameList");
     list.innerHTML="Loading...";
@@ -252,23 +318,28 @@ async function loadROMList(){
     try{
         const res=await fetch(getPath()+"roms.json");
         roms=await res.json();
-
         filtered=roms.map(r=>r.file||r);
         renderList();
-
     }catch(e){
         list.innerHTML="No ROMs found";
     }
 }
 
-function renderList(){
+async function renderList(){
     const list=document.getElementById("gameList");
     list.innerHTML="";
 
-    filtered.forEach((file,i)=>{
+    for(let i=0;i<filtered.length;i++){
+        const file=filtered[i];
+        const meta=await getMetadata(file);
+
         const div=document.createElement("div");
-        div.className="game";
-        div.textContent=file;
+        div.className="card"+(i===current?" active":"");
+
+        div.innerHTML=`
+            <img src="${meta.cover}" onerror="this.src='https://via.placeholder.com/160x220'">
+            <div class="meta">${meta.title}</div>
+        `;
 
         div.onclick=async()=>{
             current=i;
@@ -277,12 +348,11 @@ function renderList(){
         };
 
         list.appendChild(div);
-    });
+    }
 }
 
 function filterGames(){
     const q=document.getElementById("search").value.toLowerCase();
-
     filtered=roms.map(r=>r.file||r).filter(f=>f.toLowerCase().includes(q));
     renderList();
 }
@@ -314,7 +384,6 @@ window.addEventListener("keyup",e=>{
     if(k=="ArrowLeft") nes.buttonUp(1,jsnes.Controller.BUTTON_LEFT);
     if(k=="ArrowRight") nes.buttonUp(1,jsnes.Controller.BUTTON_RIGHT);
 });
-
 </script>
 </body>
 </html>
