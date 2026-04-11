@@ -3,197 +3,172 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Classic NES Emulator</title>
+<title>NES Classic Emulator</title>
 <script src="https://unpkg.com/jsnes/dist/jsnes.min.js"></script>
 <style>
-body {
-    background: #1a1a1a;
-    color: #fff;
-    font-family: 'Courier New', monospace;
-    text-align: center;
+body{
+    margin:0;
+    background:#111;
+    color:#fff;
+    font-family:monospace;
+    display:flex;
+    height:100vh;
 }
 
-.container {
-    margin-top: 30px;
+.left{
+    width:300px;
+    background:#1c1c1c;
+    padding:10px;
+    overflow-y:auto;
+    border-right:2px solid #333;
 }
 
-h1 {
-    color: #ff3c3c;
-    letter-spacing: 2px;
+.right{
+    flex:1;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
 }
 
-#screen {
-    border: 8px solid #555;
-    background: black;
-    image-rendering: pixelated;
+h1{
+    font-size:16px;
+    color:#ff3b3b;
+    text-align:center;
 }
 
-.controls {
-    margin-top: 15px;
+canvas{
+    width:512px;
+    height:480px;
+    image-rendering:pixelated;
+    border:6px solid #444;
+    background:black;
 }
 
-button {
-    background: #333;
-    color: white;
-    border: 2px solid #777;
-    padding: 10px 15px;
-    margin: 5px;
-    cursor: pointer;
+.game{
+    display:flex;
+    gap:10px;
+    padding:8px;
+    cursor:pointer;
+    border-bottom:1px solid #333;
 }
 
-button:hover {
-    background: #555;
+.game:hover{
+    background:#2a2a2a;
 }
 
-.game {
-    display: inline-block;
-    margin: 10px;
-    cursor: pointer;
+.game img{
+    width:50px;
+    height:70px;
+    object-fit:cover;
+    border:1px solid #555;
 }
 
-.game img {
-    width: 120px;
-    height: 160px;
-    display: block;
-    border: 2px solid #777;
-}
-
-.game span {
-    display: block;
-    margin-top: 5px;
-    font-size: 12px;
-}
 </style>
 </head>
 <body>
 
-<div class="container">
-    <h1>NES Emulator</h1>
-    <canvas id="screen" width="256" height="240"></canvas>
+<div class="left">
+<h1>NES Library</h1>
+<div id="gameList"></div>
+</div>
 
-    <div class="controls">
-        <input type="file" id="romInput" accept=".nes">
-    </div>
-
-    <h3>ROM Library</h3>
-    <div id="gameList"></div>
+<div class="right">
+<canvas id="screen" width="256" height="240"></canvas>
 </div>
 
 <script>
 const canvas = document.getElementById("screen");
 const ctx = canvas.getContext("2d");
-const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+const imageData = ctx.getImageData(0,0,256,240);
+
+let frameRunning = false;
 
 const nes = new jsnes.NES({
-    onFrame: function(framebuffer_24) {
-        for (let i = 0; i < framebuffer_24.length; i++) {
-            imageData.data[i * 4 + 0] = framebuffer_24[i] & 0xFF;
-            imageData.data[i * 4 + 1] = (framebuffer_24[i] >> 8) & 0xFF;
-            imageData.data[i * 4 + 2] = (framebuffer_24[i] >> 16) & 0xFF;
-            imageData.data[i * 4 + 3] = 0xFF;
+    onFrame: function(framebuffer_24){
+        for(let i=0;i<framebuffer_24.length;i++){
+            const pixel = framebuffer_24[i];
+            imageData.data[i*4] = pixel & 0xFF;
+            imageData.data[i*4+1] = (pixel>>8) & 0xFF;
+            imageData.data[i*4+2] = (pixel>>16) & 0xFF;
+            imageData.data[i*4+3] = 255;
         }
-        ctx.putImageData(imageData, 0, 0);
+        ctx.putImageData(imageData,0,0);
     }
 });
 
-let frameInterval;
-function loadROM(data) {
-    // Stop previous loop
-    if (frameInterval) clearInterval(frameInterval);
-
-    nes.loadROM(data);
-    frameInterval = setInterval(() => nes.frame(), 1000 / 60);
+function gameLoop(){
+    if(frameRunning){
+        nes.frame();
+    }
+    requestAnimationFrame(gameLoop);
 }
 
-// Upload ROM
-document.getElementById("romInput").addEventListener("change", function(e) {
-    const file = e.target.files[0];
-    const reader = new FileReader();
-    reader.onload = function() {
-        loadROM(reader.result);
-    };
-    reader.readAsBinaryString(file);
-});
+requestAnimationFrame(gameLoop);
 
-// Convert ROM name to box art URL
-function getBoxArt(name) {
-    const cleanName = name.replace(".nes", "");
-    return `https://thumbnails.libretro.com/Nintendo%20-%20Nintendo%20Entertainment%20System/Named_Boxarts/${encodeURIComponent(cleanName)}.png`;
+function loadROM(binaryString){
+    nes.loadROM(binaryString);
+    frameRunning = true;
 }
 
-// Auto load ROMs + box art
-async function loadNESRomsFromFolder() {
+// Convert file or fetch buffer properly
+async function fetchROM(path){
+    const res = await fetch(path);
+    const buffer = await res.arrayBuffer();
+    const bytes = new Uint8Array(buffer);
+
+    let binary = "";
+    for(let i=0;i<bytes.length;i++){
+        binary += String.fromCharCode(bytes[i]);
+    }
+
+    return binary;
+}
+
+// Box art
+function getBoxArt(name){
+    const clean = name.replace(".nes","");
+    return `https://thumbnails.libretro.com/Nintendo%20-%20Nintendo%20Entertainment%20System/Named_Boxarts/${encodeURIComponent(clean)}.png`;
+}
+
+// ROM list
+async function loadGames(){
     const romPath = "./roms/nes/";
 
-    try {
-        const response = await fetch("./roms/nes/roms.json");
-        const roms = await response.json();
+    try{
+        const res = await fetch("./roms/nes/roms.json");
+        const roms = await res.json();
 
-        const container = document.getElementById("gameList");
+        const list = document.getElementById("gameList");
 
-        roms.forEach(rom => {
-            const gameDiv = document.createElement("div");
-            gameDiv.className = "game";
+        roms.forEach(rom=>{
+            const div = document.createElement("div");
+            div.className="game";
 
             const img = document.createElement("img");
             img.src = getBoxArt(rom);
-            img.onerror = () => img.src = "https://via.placeholder.com/120x160?text=No+Art";
+            img.onerror = ()=>img.src="https://via.placeholder.com/50x70?text=?";
 
-            const title = document.createElement("span");
-            title.textContent = rom.replace(".nes", "");
+            const label = document.createElement("div");
+            label.textContent = rom.replace(".nes","");
 
-            gameDiv.onclick = async () => {
-                const res = await fetch(romPath + rom);
-                const buffer = await res.arrayBuffer();
+            div.appendChild(img);
+            div.appendChild(label);
 
-                // Convert ArrayBuffer -> binary string (required by jsnes)
-                const bytes = new Uint8Array(buffer);
-                let binary = "";
-                for (let i = 0; i < bytes.length; i++) {
-                    binary += String.fromCharCode(bytes[i]);
-                }
-
-                loadROM(binary);
+            div.onclick = async ()=>{
+                const bin = await fetchROM(romPath+rom);
+                loadROM(bin);
             };
 
-            gameDiv.appendChild(img);
-            gameDiv.appendChild(title);
-            container.appendChild(gameDiv);
+            list.appendChild(div);
         });
 
-    } catch (err) {
-        console.log("No ROM list found");
+    }catch(e){
+        console.log("No ROM list");
     }
 }
 
-loadNESRomsFromFolder();
-
-// Keyboard controls
-window.addEventListener("keydown", (e) => {
-    switch(e.key) {
-        case "ArrowUp": nes.buttonDown(1, jsnes.Controller.BUTTON_UP); break;
-        case "ArrowDown": nes.buttonDown(1, jsnes.Controller.BUTTON_DOWN); break;
-        case "ArrowLeft": nes.buttonDown(1, jsnes.Controller.BUTTON_LEFT); break;
-        case "ArrowRight": nes.buttonDown(1, jsnes.Controller.BUTTON_RIGHT); break;
-        case "z": nes.buttonDown(1, jsnes.Controller.BUTTON_A); break;
-        case "x": nes.buttonDown(1, jsnes.Controller.BUTTON_B); break;
-        case "Enter": nes.buttonDown(1, jsnes.Controller.BUTTON_START); break;
-        case "Shift": nes.buttonDown(1, jsnes.Controller.BUTTON_SELECT); break;
-    }
-});
-
-window.addEventListener("keyup", (e) => {
-    switch(e.key) {
-        case "ArrowUp": nes.buttonUp(1, jsnes.Controller.BUTTON_UP); break;
-        case "ArrowDown": nes.buttonUp(1, jsnes.Controller.BUTTON_DOWN); break;
-        case "ArrowLeft": nes.buttonUp(1, jsnes.Controller.BUTTON_LEFT); break;
-        case "ArrowRight": nes.buttonUp(1, jsnes.Controller.BUTTON_RIGHT); break;
-        case "z": nes.buttonUp(1, jsnes.Controller.BUTTON_A); break;
-        case "x": nes.buttonUp(1, jsnes.Controller.BUTTON_B); break;
-        case "Enter": nes.buttonUp(1, jsnes.Controller.BUTTON_START); break;
-        case "Shift": nes.buttonUp(1, jsnes.Controller.BUTTON_SELECT); break;
-    }
-});
+loadGames();
 </script>
 
 </body>
