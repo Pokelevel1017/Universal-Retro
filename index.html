@@ -3,387 +3,702 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Retro Console Hub</title>
-<script src="https://unpkg.com/jsnes/dist/jsnes.min.js"></script>
+<title>Arcade</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
-body{
-    margin:0;
-    font-family:monospace;
-    background:#0b0b0b;
-    color:#fff;
-    overflow:hidden;
+/* ─── RESET ─── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { font-size: 16px; }
+
+/* ─── TOKENS ─── */
+:root {
+  --bg:       #0e0e10;
+  --surface:  #18181b;
+  --elevated: #1f1f23;
+  --border:   rgba(255,255,255,0.07);
+  --border2:  rgba(255,255,255,0.12);
+  --text:     #f4f4f5;
+  --muted:    #71717a;
+  --accent:   #e4e4e7;
+  --red:      #ef4444;
+  --red-dim:  rgba(239,68,68,0.12);
+  --sans:     'DM Sans', system-ui, sans-serif;
+  --mono:     'DM Mono', monospace;
+  --radius:   12px;
+  --radius-sm:8px;
 }
 
-.page{display:none;height:100vh;width:100vw;}
-.page.active{display:flex;}
-
-#home{
-    align-items:center;
-    justify-content:center;
-    flex-direction:column;
+/* ─── BASE ─── */
+body {
+  font-family: var(--sans);
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
 }
 
-#home h1{
-    color:#ff3b3b;
-    margin-bottom:20px;
+/* ─── LIBRARY VIEW ─── */
+#library {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
 }
 
-.consoleGrid{
-    display:grid;
-    grid-template-columns:repeat(3,180px);
-    gap:20px;
+/* ─── TOPBAR ─── */
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 28px;
+  height: 56px;
+  border-bottom: 1px solid var(--border);
+  background: rgba(14,14,16,0.9);
+  backdrop-filter: blur(12px);
+  position: sticky;
+  top: 0;
+  z-index: 50;
 }
 
-.consoleCard{
-    background:#161616;
-    border:2px solid #333;
-    padding:20px;
-    text-align:center;
-    cursor:pointer;
-    transition:0.2s;
+.topbar-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
-.consoleCard:hover{
-    transform:scale(1.05);
-    border-color:#ff3b3b;
+.logo-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--red);
+  box-shadow: 0 0 8px var(--red);
 }
 
-#library{
-    flex-direction:row;
+.logo-name {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.3px;
+  color: var(--text);
 }
 
-#sidebar{
-    width:380px;
-    background:#141414;
-    border-right:2px solid #2a2a2a;
-    display:flex;
-    flex-direction:column;
+.topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
-#search{
-    padding:10px;
-    background:#0f0f0f;
-    border:none;
-    color:#fff;
-    outline:none;
-    border-bottom:1px solid #222;
+.search-wrap {
+  position: relative;
 }
 
-#gameList{
-    display:flex;
-    gap:16px;
-    overflow-x:auto;
-    padding:20px;
-    scroll-snap-type:x mandatory;
+.search-wrap svg {
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--muted);
+  pointer-events: none;
 }
 
-.card{
-    flex:0 0 auto;
-    width:160px;
-    transform:scale(0.85);
-    opacity:0.5;
-    transition:0.3s;
-    scroll-snap-align:center;
-    text-align:center;
-    cursor:pointer;
+#searchInput {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 7px 12px 7px 32px;
+  color: var(--text);
+  font-family: var(--sans);
+  font-size: 13px;
+  width: 200px;
+  outline: none;
+  transition: border-color 0.15s, width 0.2s;
 }
 
-.card.active{
-    transform:scale(1.15);
-    opacity:1;
+#searchInput::placeholder { color: var(--muted); }
+#searchInput:focus { border-color: var(--border2); width: 240px; }
+
+/* ─── CONTENT ─── */
+.content {
+  flex: 1;
+  padding: 32px 28px 60px;
+  max-width: 1400px;
+  margin: 0 auto;
+  width: 100%;
 }
 
-.card img{
-    width:160px;
-    height:220px;
-    object-fit:cover;
-    border-radius:6px;
-    border:2px solid #333;
+/* ─── SECTION HEADER ─── */
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
 }
 
-.meta{
-    font-size:10px;
-    color:#aaa;
-    margin-top:4px;
+.section-title {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--muted);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
 }
 
-#screenArea{
-    flex:1;
-    display:flex;
-    flex-direction:column;
-    align-items:center;
-    justify-content:center;
-    position:relative;
+.game-count {
+  font-size: 12px;
+  color: var(--muted);
+  font-family: var(--mono);
 }
 
-canvas{
-    width:512px;
-    height:480px;
-    background:black;
-    border:6px solid #333;
-    image-rendering:pixelated;
+/* ─── GRID ─── */
+.game-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 16px;
 }
 
-button{
-    margin-top:10px;
-    background:#222;
-    color:#fff;
-    border:1px solid #444;
-    padding:6px 10px;
-    cursor:pointer;
+/* ─── GAME CARD ─── */
+.game-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  cursor: pointer;
+  transition: border-color 0.15s, transform 0.15s, box-shadow 0.15s;
+  user-select: none;
 }
 
-#boot{
-    position:absolute;
-    inset:0;
-    background:black;
-    display:flex;
-    align-items:center;
-    justify-content:center;
-    font-size:18px;
-}
-#boot.hide{display:none;}
-
-#controlsOverlay{
-    position:absolute;
-    right:10px;
-    top:10px;
-    width:240px;
-    background:rgba(20,20,20,0.85);
-    border:1px solid #333;
-    padding:10px;
-    font-size:11px;
-    line-height:1.6em;
+.game-card:hover {
+  border-color: var(--border2);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.4);
 }
 
-#controlsOverlay h3{
-    margin:0 0 6px 0;
-    font-size:12px;
-    color:#ff3b3b;
+.game-card:active { transform: translateY(0); }
+
+.card-art {
+  width: 100%;
+  aspect-ratio: 3/4;
+  background: var(--elevated);
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.card-art img {
+  width: 100%; height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.card-art-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%; height: 100%;
+  background: var(--elevated);
+}
+
+.card-art-placeholder .nes-icon {
+  width: 48px; height: 48px;
+  opacity: 0.15;
+}
+
+.card-art-placeholder .rom-ext {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--muted);
+  letter-spacing: 0.1em;
+  opacity: 0.6;
+}
+
+/* per-game color accent on placeholder bg */
+.card-art-placeholder { background: var(--elevated); }
+
+.card-info {
+  padding: 10px 12px 12px;
+  border-top: 1px solid var(--border);
+}
+
+.card-title {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.3;
+}
+
+.card-meta {
+  margin-top: 3px;
+  font-size: 11px;
+  color: var(--muted);
+  font-family: var(--mono);
+}
+
+/* ─── PLAY BADGE ─── */
+.card-art::after {
+  content: 'PLAY';
+  position: absolute;
+  inset: 0;
+  background: rgba(0,0,0,0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.15em;
+  color: #fff;
+  opacity: 0;
+  transition: opacity 0.15s;
+  font-family: var(--sans);
+}
+
+.game-card:hover .card-art::after { opacity: 1; }
+
+/* ─── EMPTY STATE ─── */
+.empty-state {
+  grid-column: 1/-1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 80px 20px;
+  gap: 12px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.empty-state svg { opacity: 0.2; }
+.empty-state p { font-size: 14px; }
+.empty-state code {
+  font-family: var(--mono);
+  font-size: 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  padding: 2px 8px;
+  border-radius: 4px;
+  color: var(--muted);
+}
+
+/* ─── EMULATOR VIEW ─── */
+#emulator {
+  display: none;
+  flex-direction: column;
+  height: 100vh;
+  background: #000;
+}
+
+#emulator.active { display: flex; }
+#library.hidden  { display: none; }
+
+/* ─── EMU TOPBAR ─── */
+.emu-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 20px;
+  height: 48px;
+  background: rgba(10,10,12,0.95);
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+  flex-shrink: 0;
+  z-index: 10;
+}
+
+.emu-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+#backBtn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--muted);
+  font-family: var(--sans);
+  font-size: 13px;
+  padding: 5px 12px;
+  cursor: pointer;
+  transition: color 0.1s, border-color 0.1s;
+}
+
+#backBtn:hover { color: var(--text); border-color: var(--border2); }
+
+.emu-game-name {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text);
+}
+
+.emu-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.emu-badge {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--muted);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  padding: 3px 8px;
+  border-radius: 4px;
+  letter-spacing: 0.05em;
+}
+
+.emu-btn {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--muted);
+  font-family: var(--sans);
+  font-size: 12px;
+  padding: 5px 10px;
+  cursor: pointer;
+  transition: color 0.1s, border-color 0.1s;
+}
+.emu-btn:hover { color: var(--text); border-color: var(--border2); }
+
+/* ─── EMU CANVAS AREA ─── */
+.emu-body {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #000;
+  position: relative;
+}
+
+#emulator-container {
+  width: 100%;
+  height: 100%;
+  max-width: 900px;
+  position: relative;
+}
+
+#emulator-container canvas,
+#emulator-container video {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: contain;
+}
+
+/* ─── CONTROLS FOOTER ─── */
+.emu-footer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  padding: 10px 20px;
+  background: rgba(10,10,12,0.95);
+  border-top: 1px solid rgba(255,255,255,0.05);
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+
+.ctrl-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.ctrl-key {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 2px 7px;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--accent);
+}
+
+/* ─── SCROLLBAR ─── */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #2a2a2e; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #3a3a3f; }
+
+/* ─── RESPONSIVE ─── */
+@media (max-width: 600px) {
+  .content { padding: 20px 16px 40px; }
+  .topbar { padding: 0 16px; }
+  #searchInput { width: 140px; }
+  #searchInput:focus { width: 160px; }
+  .emu-footer { gap: 12px; }
 }
 </style>
 </head>
 <body>
 
-<div id="home" class="page active">
-    <h1>RETRO CONSOLE HUB</h1>
-    <div class="consoleGrid">
-        <div class="consoleCard" onclick="openConsole('nes')">NES</div>
-        <div class="consoleCard" onclick="openConsole('snes')">SNES</div>
-        <div class="consoleCard" onclick="openConsole('gb')">Game Boy</div>
-        <div class="consoleCard" onclick="openConsole('gbc')">Game Boy Color</div>
-        <div class="consoleCard" onclick="openConsole('gba')">Game Boy Advance</div>
+<!-- ══════════════════════════════
+     LIBRARY VIEW
+═══════════════════════════════ -->
+<div id="library">
+  <header class="topbar">
+    <div class="topbar-left">
+      <div class="logo-dot"></div>
+      <span class="logo-name">Arcade</span>
     </div>
+    <div class="topbar-right">
+      <div class="search-wrap">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+        </svg>
+        <input id="searchInput" type="text" placeholder="Search games…" oninput="filterGames()">
+      </div>
+    </div>
+  </header>
+
+  <div class="content">
+    <div class="section-header">
+      <span class="section-title">Library</span>
+      <span class="game-count" id="gameCount">0 games</span>
+    </div>
+    <div class="game-grid" id="gameGrid"></div>
+  </div>
 </div>
 
-<div id="library" class="page">
+<!-- ══════════════════════════════
+     EMULATOR VIEW
+═══════════════════════════════ -->
+<div id="emulator">
+  <div class="emu-topbar">
+    <div class="emu-left">
+      <button id="backBtn" onclick="exitGame()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M19 12H5M5 12l7 7M5 12l7-7"/>
+        </svg>
+        Library
+      </button>
+      <span class="emu-game-name" id="emuGameName">—</span>
+    </div>
+    <div class="emu-right">
+      <span class="emu-badge">NES</span>
+      <button class="emu-btn" onclick="toggleFullscreen()">⛶ Fullscreen</button>
+    </div>
+  </div>
 
-<div id="sidebar">
-    <input id="search" placeholder="Search games..." oninput="filterGames()">
-    <div id="gameList"></div>
+  <div class="emu-body">
+    <div id="emulator-container"></div>
+  </div>
+
+  <div class="emu-footer">
+    <div class="ctrl-chip"><span class="ctrl-key">↑↓←→</span> Move</div>
+    <div class="ctrl-chip"><span class="ctrl-key">Z</span> A button</div>
+    <div class="ctrl-chip"><span class="ctrl-key">X</span> B button</div>
+    <div class="ctrl-chip"><span class="ctrl-key">Enter</span> Start</div>
+    <div class="ctrl-chip"><span class="ctrl-key">Shift</span> Select</div>
+    <div class="ctrl-chip"><span class="ctrl-key">F</span> Fullscreen</div>
+  </div>
 </div>
 
-<div id="screenArea">
-<div id="boot">BOOTING...</div>
-<canvas id="screen" width="256" height="240"></canvas>
-
-<div id="controlsOverlay">
-<h3>KEYBINDS</h3>
-⬅➡⬆⬇ = D-Pad<br>
-Z = A Button<br>
-X = B Button<br>
-Enter = Start<br>
-Shift = Select<br>
-</div>
-
-<button onclick="backHome()">Back</button>
-</div>
-
-</div>
+<!-- EmulatorJS -->
+<script src="https://cdn.emulatorjs.org/stable/data/loader.js"></script>
 
 <script>
-let currentConsole="nes";
-let roms=[];
-let filtered=[];
-let current=0;
-let running=false;
-let metadataCache={};
+// ══════════════════════════════════════════════
+//  ★  GAMES CONFIG  ★
+//  Add your ROMs here. Each entry needs:
+//    title  — display name
+//    rom    — path to .nes file (relative to index.html)
+//    cover  — optional cover image path (or leave null)
+//    color  — accent hex for placeholder bg tint
+// ══════════════════════════════════════════════
+const GAMES = [
+  {
+    title:  "Super Mario Bros. + Duck Hunt",
+    rom:    "roms/Super Mario Bros. + Duck Hunt (USA).nes",
+    cover:  null,
+    color:  "#d63031"
+  },
+  {
+    title:  "The Legend of Zelda",
+    rom:    "roms/zelda.nes",
+    cover:  null,
+    color:  "#fdcb6e"
+  },
+  {
+    title:  "Mega Man 2",
+    rom:    "roms/megaman2.nes",
+    cover:  null,
+    color:  "#0984e3"
+  },
+  {
+    title:  "Contra",
+    rom:    "roms/contra.nes",
+    cover:  null,
+    color:  "#6c5ce7"
+  },
+  {
+    title:  "Castlevania",
+    rom:    "roms/castlevania.nes",
+    cover:  null,
+    color:  "#2d3436"
+  },
+  {
+    title:  "Metroid",
+    rom:    "roms/metroid.nes",
+    cover:  null,
+    color:  "#00b894"
+  },
+  {
+    title:  "Tetris",
+    rom:    "roms/tetris.nes",
+    cover:  null,
+    color:  "#e17055"
+  },
+  {
+    title:  "Duck Tales",
+    rom:    "roms/ducktales.nes",
+    cover:  null,
+    color:  "#74b9ff"
+  },
+];
 
-const TGDB_API_KEY="c93770c06e8d4589c634bb2f6835351b1b956446d539dfb1e51ed06ab6293587";
+// ══════════════════════════════════════════════
 
-const canvas=document.getElementById("screen");
-const ctx=canvas.getContext("2d");
-const imageData=ctx.getImageData(0,0,256,240);
+let filtered = [...GAMES];
+let emuLoaded = false;
 
-const nes=new jsnes.NES({
-    onFrame(framebuffer){
-        for(let i=0;i<framebuffer.length;i++){
-            const p=framebuffer[i];
-            imageData.data[i*4]=p&255;
-            imageData.data[i*4+1]=(p>>8)&255;
-            imageData.data[i*4+2]=(p>>16)&255;
-            imageData.data[i*4+3]=255;
-        }
-        ctx.putImageData(imageData,0,0);
+// Soft bg colors for placeholder art
+function hexToRgba(hex, a) {
+  const r = parseInt(hex.slice(1,3),16);
+  const g = parseInt(hex.slice(3,5),16);
+  const b = parseInt(hex.slice(5,7),16);
+  return `rgba(${r},${g},${b},${a})`;
+}
+
+function buildGrid(list) {
+  const grid = document.getElementById('gameGrid');
+  document.getElementById('gameCount').textContent = `${list.length} game${list.length!==1?'s':''}`;
+
+  if (!list.length) {
+    grid.innerHTML = `
+      <div class="empty-state">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <rect x="2" y="6" width="20" height="14" rx="2"/>
+          <path d="M12 2v4M8 2v2M16 2v2"/>
+          <circle cx="8" cy="13" r="1"/><circle cx="16" cy="13" r="1"/>
+          <path d="M12 11v4M10 13h4"/>
+        </svg>
+        <p>No games found.</p>
+        <p>Add ROMs to <code>roms/</code> and update the <code>GAMES</code> list.</p>
+      </div>`;
+    return;
+  }
+
+  grid.innerHTML = list.map((g, i) => {
+    const artBg = `background:linear-gradient(135deg,${hexToRgba(g.color,0.18)} 0%,${hexToRgba(g.color,0.06)} 100%)`;
+    const art = g.cover
+      ? `<img src="${g.cover}" alt="${g.title}" loading="lazy" onerror="this.parentElement.innerHTML=fallbackArt()">`
+      : `<div class="card-art-placeholder" style="${artBg}">
+           <svg class="nes-icon" viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="1.5">
+             <rect x="4" y="16" width="56" height="38" rx="4"/>
+             <circle cx="20" cy="35" r="5"/>
+             <circle cx="44" cy="35" r="5"/>
+             <path d="M28 30h8M32 26v8"/>
+             <rect x="14" y="10" width="8" height="8" rx="1"/>
+             <rect x="42" y="10" width="8" height="8" rx="1"/>
+           </svg>
+           <span class="rom-ext">.NES</span>
+         </div>`;
+    const shortName = g.rom.split('/').pop().replace('.nes','').toUpperCase();
+    return `
+      <div class="game-card" onclick="launchGame(${i})" style="animation:fadeUp 0.3s ${i*0.04}s both">
+        <div class="card-art">${art}</div>
+        <div class="card-info">
+          <div class="card-title">${g.title}</div>
+          <div class="card-meta">${shortName}</div>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+function filterGames() {
+  const q = document.getElementById('searchInput').value.toLowerCase();
+  filtered = GAMES.filter(g => g.title.toLowerCase().includes(q) || g.rom.toLowerCase().includes(q));
+  buildGrid(filtered);
+}
+
+function launchGame(idx) {
+  const game = filtered[idx];
+  document.getElementById('emuGameName').textContent = game.title;
+  document.getElementById('library').classList.add('hidden');
+  document.getElementById('emulator').classList.add('active');
+
+  // Clear previous emulator
+  const container = document.getElementById('emulator-container');
+  container.innerHTML = '';
+
+  // Init EmulatorJS
+  window.EJS_player = '#emulator-container';
+  window.EJS_core = 'nes';
+  window.EJS_gameUrl = game.rom;
+  window.EJS_pathtodata = 'https://cdn.emulatorjs.org/stable/data/';
+  window.EJS_startOnLoaded = true;
+  window.EJS_color = '#ef4444';
+  window.EJS_backgroundColor = '#000000';
+  window.EJS_volume = 0.6;
+  window.EJS_defaultControls = {
+    0: {
+      0:  { value: 'ARROW_UP' },
+      1:  { value: 'ARROW_DOWN' },
+      2:  { value: 'ARROW_LEFT' },
+      3:  { value: 'ARROW_RIGHT' },
+      4:  { value: 'Z' },
+      5:  { value: 'X' },
+      6:  { value: 'SHIFT' },
+      7:  { value: 'ENTER' },
     }
+  };
+
+  // Reload the loader script to re-init
+  const old = document.querySelector('script[src*="emulatorjs"]');
+  if (old) old.remove();
+  const s = document.createElement('script');
+  s.src = 'https://cdn.emulatorjs.org/stable/data/loader.js';
+  document.body.appendChild(s);
+}
+
+function exitGame() {
+  document.getElementById('emulator').classList.remove('active');
+  document.getElementById('library').classList.remove('hidden');
+  // Kill emulator
+  const container = document.getElementById('emulator-container');
+  container.innerHTML = '';
+  // remove loader
+  const s = document.querySelector('script[src*="emulatorjs"]');
+  if (s) s.remove();
+}
+
+function toggleFullscreen() {
+  const el = document.getElementById('emulator-container');
+  if (!document.fullscreenElement) el.requestFullscreen?.();
+  else document.exitFullscreen?.();
+}
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && document.getElementById('emulator').classList.contains('active')) exitGame();
+  if (e.key === 'f' || e.key === 'F') {
+    if (document.getElementById('emulator').classList.contains('active')) toggleFullscreen();
+  }
 });
 
-let last=0;
-function loop(ts){
-    if(ts-last>16.67){
-        if(running) nes.frame();
-        last=ts;
-    }
-    requestAnimationFrame(loop);
-}
-requestAnimationFrame(loop);
+// Fade-up animation
+const style = document.createElement('style');
+style.textContent = `@keyframes fadeUp { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:translateY(0); } }`;
+document.head.appendChild(style);
 
-window.onload=()=>setTimeout(()=>document.getElementById("boot").classList.add("hide"),800);
-
-function showPage(id){
-    document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
-    document.getElementById(id).classList.add('active');
-}
-
-function openConsole(type){
-    currentConsole=type;
-    showPage('library');
-    loadROMList();
-}
-
-function backHome(){
-    showPage('home');
-}
-
-function loadROM(bin){
-    nes.loadROM(bin);
-    running=true;
-}
-
-async function fetchROM(path){
-    const r=await fetch(path);
-    const b=await r.arrayBuffer();
-    const u=new Uint8Array(b);
-    let s="";
-    for(let i=0;i<u.length;i++) s+=String.fromCharCode(u[i]);
-    return s;
-}
-
-function getPath(){
-    return `./roms/${currentConsole}/`;
-}
-
-function cleanName(name){
-    return name.replace(/\.[^/.]+$/,"").replace(/[_\.]/g," ");
-}
-
-async function getMetadata(file){
-    if(metadataCache[file]) return metadataCache[file];
-
-    const query=encodeURIComponent(cleanName(file));
-
-    try{
-        const res=await fetch(`https://api.thegamesdb.net/v1/Games/ByGameName?apikey=${TGDB_API_KEY}&name=${query}&fields=boxart`);
-        const data=await res.json();
-
-        let game=data?.data?.games?.[0];
-
-        let cover="https://via.placeholder.com/160x220";
-        let title=cleanName(file);
-
-        if(game){
-            title=game.game_title || title;
-
-            const base=data?.include?.boxart?.base_url?.original;
-            const box=game.boxart?.find(b=>b.side=="front");
-
-            if(box && base) cover=base+box.filename;
-        }
-
-        const meta={title,cover};
-        metadataCache[file]=meta;
-        return meta;
-
-    }catch(e){
-        const fallback={title:cleanName(file),cover:"https://via.placeholder.com/160x220"};
-        metadataCache[file]=fallback;
-        return fallback;
-    }
-}
-
-async function loadROMList(){
-    const list=document.getElementById("gameList");
-    list.innerHTML="Loading...";
-
-    try{
-        const res=await fetch(getPath()+"roms.json");
-        roms=await res.json();
-        filtered=roms.map(r=>r.file||r);
-        renderList();
-    }catch(e){
-        list.innerHTML="No ROMs found";
-    }
-}
-
-async function renderList(){
-    const list=document.getElementById("gameList");
-    list.innerHTML="";
-
-    for(let i=0;i<filtered.length;i++){
-        const file=filtered[i];
-        const meta=await getMetadata(file);
-
-        const div=document.createElement("div");
-        div.className="card"+(i===current?" active":"");
-
-        div.innerHTML=`
-            <img src="${meta.cover}" onerror="this.src='https://via.placeholder.com/160x220'">
-            <div class="meta">${meta.title}</div>
-        `;
-
-        div.onclick=async()=>{
-            current=i;
-            const bin=await fetchROM(getPath()+file);
-            loadROM(bin);
-        };
-
-        list.appendChild(div);
-    }
-}
-
-function filterGames(){
-    const q=document.getElementById("search").value.toLowerCase();
-    filtered=roms.map(r=>r.file||r).filter(f=>f.toLowerCase().includes(q));
-    renderList();
-}
-
-window.addEventListener("keydown",e=>{
-    if(currentConsole!="nes") return;
-    const k=e.key;
-
-    if(k=="z") nes.buttonDown(1,jsnes.Controller.BUTTON_A);
-    if(k=="x") nes.buttonDown(1,jsnes.Controller.BUTTON_B);
-    if(k=="Enter") nes.buttonDown(1,jsnes.Controller.BUTTON_START);
-    if(k=="Shift") nes.buttonDown(1,jsnes.Controller.BUTTON_SELECT);
-    if(k=="ArrowUp") nes.buttonDown(1,jsnes.Controller.BUTTON_UP);
-    if(k=="ArrowDown") nes.buttonDown(1,jsnes.Controller.BUTTON_DOWN);
-    if(k=="ArrowLeft") nes.buttonDown(1,jsnes.Controller.BUTTON_LEFT);
-    if(k=="ArrowRight") nes.buttonDown(1,jsnes.Controller.BUTTON_RIGHT);
-});
-
-window.addEventListener("keyup",e=>{
-    if(currentConsole!="nes") return;
-    const k=e.key;
-
-    if(k=="z") nes.buttonUp(1,jsnes.Controller.BUTTON_A);
-    if(k=="x") nes.buttonUp(1,jsnes.Controller.BUTTON_B);
-    if(k=="Enter") nes.buttonUp(1,jsnes.Controller.BUTTON_START);
-    if(k=="Shift") nes.buttonUp(1,jsnes.Controller.BUTTON_SELECT);
-    if(k=="ArrowUp") nes.buttonUp(1,jsnes.Controller.BUTTON_UP);
-    if(k=="ArrowDown") nes.buttonUp(1,jsnes.Controller.BUTTON_DOWN);
-    if(k=="ArrowLeft") nes.buttonUp(1,jsnes.Controller.BUTTON_LEFT);
-    if(k=="ArrowRight") nes.buttonUp(1,jsnes.Controller.BUTTON_RIGHT);
-});
+// Init
+buildGrid(GAMES);
 </script>
 </body>
 </html>
